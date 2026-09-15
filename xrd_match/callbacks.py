@@ -1,6 +1,7 @@
 import base64
 import os
 import re
+from pathlib import Path
 import pandas as pd
 from dash import Input, Output, State, callback_context, html, no_update
 import plotly.graph_objects as go
@@ -851,21 +852,24 @@ def register_callbacks(app):
     # Download Plot Callback
     # ------------------------------------------------------------------
     @app.callback(
-        Output("plot-download", "data"),
+        Output("plot-download-status", "children"),
         Input("download-plot-btn", "n_clicks"),
         State("xrd-plot", "figure"),
         State("upload-xy", "filename"),
         prevent_initial_call=True
     )
     def download_plot_png(n_clicks, figure, xy_filename):
-        download_name = "xrd_pattern.png"
+        # Named after the .xy file (e.g. "607.xy" -> "607.png") so it's
+        # obviously paired with the data it came from once it's sitting in
+        # Downloads next to everything else.
+        filename = "xrd_pattern.png"
         if xy_filename:
             stem, ext = os.path.splitext(os.path.basename(xy_filename))
             if stem and ext.lower() == ".xy":
-                download_name = f"{stem}_xrd.png"
+                filename = f"{stem}.png"
 
         if not figure:
-            return no_update
+            return "✗ nothing to save yet"
         try:
             fig = go.Figure(figure)
             fig.update_layout(
@@ -888,11 +892,20 @@ def register_callbacks(app):
                 height=400,
                 validate=False
             )
-            b64_str = base64.b64encode(img_bytes).decode("ascii")
-            return {"content": b64_str, "filename": download_name, "type": "image/png", "base64": True}
+            # Write straight to ~/Downloads server-side instead of routing
+            # through a browser/webview download: that path depends on
+            # WKWebView's download handling, which needs pywebview's
+            # ALLOW_DOWNLOADS setting (see desktop_main.py) and a native save
+            # panel the user has to click through — a direct file write always
+            # works the same way in dev mode and the packaged app alike, and
+            # matches "just save it to Downloads" rather than asking each time.
+            downloads_dir = Path.home() / "Downloads"
+            downloads_dir.mkdir(parents=True, exist_ok=True)
+            (downloads_dir / filename).write_bytes(img_bytes)
+            return f"✓ Saved {filename} to Downloads"
         except Exception as e:
-            print("Error generating plot download:", e)
-            return no_update
+            print("Error saving plot:", e)
+            return "✗ couldn't save plot"
 
     # ------------------------------------------------------------------
     # Enable/disable the Generate Pawley/Riet buttons — both need an .xy

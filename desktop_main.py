@@ -46,6 +46,11 @@ def _wait_until_ready(url: str, timeout: float) -> bool:
 
 
 def main():
+    # pywebview disables downloads by default — without this, the native
+    # window silently ignores the "Download plot" button (and any other
+    # dcc.Download-triggered save) instead of showing a save dialog.
+    webview.settings['ALLOW_DOWNLOADS'] = True
+
     app = create_app()
     server = app.server
     port = _free_port()

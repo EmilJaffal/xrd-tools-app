@@ -4,6 +4,7 @@ __pycache__/
 build_output/
 dist/
 *.spec.bak
+.claude/
 
 # Stray output artifacts a "Generate .inp" click could leave behind if ever
 # run from this directory directly (normally delivered via dcc.Download instead)

@@ -355,19 +355,15 @@ def create_layout():
             html.Div([
                 html.Div([
                     html.Div([
-                        # A plain button + dcc.Download (same pattern as the
-                        # Pawley/Riet .inp downloads below) instead of an
-                        # <a href="data:..." download target="_blank">: that
-                        # combination is unreliable in the desktop app's
-                        # WKWebView, which doesn't honor the `download`
-                        # attribute for data: URIs the way a normal browser
-                        # does — target="_blank" made it try to *navigate*
-                        # the single app window to the raw image instead,
-                        # which looked like the whole app "refreshing" rather
-                        # than a file actually saving.
+                        # Writes the PNG straight to ~/Downloads server-side
+                        # instead of triggering a browser/webview download:
+                        # the previous <a href="data:..." download> and later
+                        # dcc.Download approaches both depend on WKWebView's
+                        # download handling (unreliable — see git history),
+                        # which a direct file write sidesteps entirely.
                         html.Button("Download plot", id="download-plot-btn", n_clicks=0, className="btn btn-accent"),
-                        dcc.Download(id="plot-download"),
-                    ], style={"marginBottom": "10px"}),
+                        html.Span(id="plot-download-status", style={"marginLeft": "8px", "color": "#16a34a", "fontSize": "13px"}),
+                    ], style={"marginBottom": "10px", "display": "flex", "alignItems": "center"}),
 
                     html.Div([
                         # Computing the diffraction pattern (pymatgen) can

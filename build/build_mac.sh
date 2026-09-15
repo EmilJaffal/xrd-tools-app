@@ -31,10 +31,29 @@ done
 
 pyinstaller build/xrd_tools.spec --noconfirm --distpath dist --workpath build_output
 
+# kaleido (used for "Download plot" PNG export) ships its own launcher shell
+# script with an UNQUOTED path variable (`cd $DIR`) — this breaks the moment
+# the app lives anywhere with a space in the path, which "XRD Tools.app"
+# itself guarantees. Without this, every plot download silently no-ops
+# (the Python side catches the resulting subprocess failure and swallows it).
+# Fix it in place inside the built bundle.
+kaleido_launcher="dist/XRD Tools.app/Contents/Resources/kaleido/executable/kaleido"
+if [ -f "$kaleido_launcher" ]; then
+    cat > "$kaleido_launcher" <<'KALEIDO_EOF'
+#!/bin/bash
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+cd "$DIR"
+exec "$DIR/bin/kaleido" "$@"
+KALEIDO_EOF
+    chmod +x "$kaleido_launcher"
+fi
+
 # PyInstaller's own ad-hoc signing step can fail with "resource fork, Finder
 # information, or similar detritus not allowed" for the same iCloud-sync
 # reason above — strip those extended attributes and re-sign so the app
-# isn't left with a broken/partial signature.
+# isn't left with a broken/partial signature. Signing also has to happen
+# *after* the kaleido patch above, or the rewritten file would invalidate it.
 if [ -d "dist/XRD Tools.app" ]; then
     xattr -cr "dist/XRD Tools.app" 2>/dev/null || true
     codesign -s - --force --deep "dist/XRD Tools.app"
