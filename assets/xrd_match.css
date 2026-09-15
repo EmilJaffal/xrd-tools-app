@@ -1,0 +1,8 @@
+/* XRD Match tab. Font is unified with the rest of the app (see theme.css) —
+   this just keeps the "Open Sans" family name some inline styles in
+   xrd_match/layout.py still reference resolving to the same real typeface,
+   instead of an unrelated mismatched font file. */
+@font-face {
+    font-family: 'Open Sans';
+    src: url('/assets/fonts/OpenSans-Regular.ttf') format('truetype');
+}

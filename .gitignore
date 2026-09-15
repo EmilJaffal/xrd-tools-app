@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+build_output/
+dist/
+*.spec.bak
+
+# Stray output artifacts a "Generate .inp" click could leave behind if ever
+# run from this directory directly (normally delivered via dcc.Download instead)
+pawley.inp
+Riet.inp
+xrd_pattern.png
+
+.DS_Store

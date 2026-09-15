@@ -1,0 +1,10 @@
+/* MultiPattern XRD tab. Font is unified with the rest of the app (see
+   theme.css) — this just keeps the "Dejavu Sans" family name that
+   multipattern_xrd/layout.py's root style still references resolving to the
+   same real typeface, instead of the original mismatched font file. */
+@font-face {
+    font-family: 'Dejavu Sans';
+    src: url('/assets/fonts/OpenSans-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}

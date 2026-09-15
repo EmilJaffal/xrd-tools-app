@@ -1,0 +1,242 @@
+/* ---------------------------------------------------------------------
+   XRD Tools — shared design system
+   Applies to both tabs so the app reads as one cohesive product rather
+   than two apps stitched together. Only lays down colors/typography/
+   spacing that neither ported app's Python code sets inline, so nothing
+   here fights with the callback-driven `style` props each app already
+   relies on (visibility toggles, the "shifted" highlight, etc).
+   --------------------------------------------------------------------- */
+
+@font-face {
+    font-family: 'App Sans';
+    src: url('/assets/fonts/OpenSans-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+}
+
+:root {
+    --bg: #f6f7fb;
+    --surface: #ffffff;
+    --border: #e3e5eb;
+    --text: #1f2430;
+    --text-muted: #6b7280;
+
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+    --accent-soft: #eef0fe;
+
+    --danger: #e6483f;
+    --danger-hover: #cf3a32;
+    --danger-soft: #fdecec;
+
+    --neutral: #f1f2f5;
+    --neutral-hover: #e5e7ec;
+
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+    --shadow-md: 0 2px 8px rgba(16, 24, 40, 0.08);
+}
+
+html, body {
+    background: var(--bg);
+    color: var(--text);
+}
+
+body, .tab-xrd-match, .tab-multipattern {
+    font-family: 'App Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* ---- App chrome: header + tab bar (app_factory.py) ---- */
+
+.app-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 22px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.app-header__title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0;
+}
+
+.app-header__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+}
+
+.app-tabs.tabs-container {
+    border-bottom: 1px solid var(--border) !important;
+    background: var(--surface);
+    padding: 0 16px;
+}
+
+.app-tab.tab {
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    font-weight: 600 !important;
+    padding: 14px 18px !important;
+    box-shadow: none !important;
+}
+
+.app-tab--selected.tab--selected {
+    color: var(--accent) !important;
+    border-bottom: 2px solid var(--accent) !important;
+    box-shadow: none !important;
+}
+
+.app-body {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px 24px 40px;
+}
+
+/* XRD Match specifically should fill a stretched/wide window instead of
+   staying capped at 1400px like MultiPattern XRD — the plot column is
+   `flex: 1 1 auto` (see xrd_match/layout.py) so it's the one that actually
+   grows to use the extra width; the CIF sidebar stays a fixed 340px. */
+.tab-xrd-match.app-body {
+    max-width: none;
+}
+
+/* ---- Buttons ---- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, transform .05s ease;
+}
+.btn:active { transform: translateY(1px); }
+
+.btn-accent {
+    background: var(--accent);
+    color: #fff;
+}
+.btn-accent:hover { background: var(--accent-hover); }
+
+.btn:disabled {
+    background: var(--neutral) !important;
+    color: var(--text-muted) !important;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+.btn:disabled:hover { background: var(--neutral) !important; }
+
+.btn-neutral {
+    background: var(--neutral);
+    color: var(--text);
+    border-color: var(--border);
+}
+.btn-neutral:hover { background: var(--neutral-hover); }
+
+.btn-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: var(--danger-soft);
+}
+.btn-danger:hover { background: var(--danger); color: #fff; }
+
+.btn-toggle-on {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--accent-soft);
+}
+.btn-toggle-off {
+    background: var(--neutral);
+    color: var(--text-muted);
+    border-color: var(--border);
+}
+
+/* Compact variant for buttons packed into tight rows (per-CIF block header). */
+.btn-sm {
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+}
+
+/* ---- Cards / panels ---- */
+
+.panel {
+    background: var(--surface);
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.panel-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+}
+
+/* ---- Inputs / sliders ---- */
+
+.field-input {
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    background: var(--surface);
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.field-input:focus {
+    outline: none;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.field-label {
+    /* `<label>` is inline by default, so an a/b/c/α/β/γ label and its
+       dcc.Input were sitting on the same line with no real gap between
+       them, crowding right up against the input box. Block-level stacks
+       the label above the input instead, which is also what the input's
+       own `margin: 6px 0 0` (see xrd_match/layout.py) was already assuming. */
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* α/β/γ labels: `text-transform: uppercase` above turns them into capital
+   Greek letters (Α, Β, Γ) — Α and Β are visually indistinguishable from
+   Latin A/B, which reads as a duplicate of the a/b/c labels next to them.
+   Keep these lowercase so they actually read as alpha/beta/gamma. */
+.field-label--greek {
+    text-transform: none;
+    font-size: 15px;
+}
+
+.upload-zone {
+    border: 1.5px dashed var(--border) !important;
+    border-radius: var(--radius) !important;
+    background: var(--surface) !important;
+    color: var(--text-muted);
+    transition: border-color .15s ease, background-color .15s ease;
+}
+.upload-zone:hover {
+    border-color: var(--accent) !important;
+    background: var(--accent-soft) !important;
+}
+
+/* Rely on the browser's slider styling for the handle/track (Dash's own
+   inline widths/marks still apply) but keep the accent color consistent. */
+.rc-slider-track, .rc-slider-dot-active { background-color: var(--accent) !important; }
+.rc-slider-handle { border-color: var(--accent) !important; }
