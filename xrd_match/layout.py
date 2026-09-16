@@ -292,7 +292,8 @@ def create_layout():
                         disabled=True,
                         className="btn btn-accent",
                     ),
-                    html.Span(id="pawley-copy-status", style={"marginLeft": "8px", "color": "#16a34a", "fontSize": "13px"})
+                    html.Span(id="pawley-copy-status", style={"marginLeft": "8px", "color": "#16a34a", "fontSize": "13px"}),
+                    html.Span(id="pawley-save-status", style={"marginLeft": "8px", "color": "#16a34a", "fontSize": "13px"})
                 ], style={"display": "inline-flex", "alignItems": "center", "marginLeft": "16px"}),
 
                 html.Div([
@@ -303,7 +304,8 @@ def create_layout():
                         disabled=True,
                         className="btn btn-accent",
                     ),
-                    html.Span(id="riet-copy-status", style={"marginLeft": "8px", "color": "#16a34a", "fontSize": "13px"})
+                    html.Span(id="riet-copy-status", style={"marginLeft": "8px", "color": "#16a34a", "fontSize": "13px"}),
+                    html.Span(id="riet-save-status", style={"marginLeft": "8px", "color": "#16a34a", "fontSize": "13px"})
                 ], style={"display": "inline-flex", "alignItems": "center", "marginLeft": "10px"}),
             ], className="panel-row", style={"display": "flex", "flexWrap": "wrap", "alignItems": "center", "marginBottom": "12px"}),
 
@@ -413,8 +415,6 @@ def create_layout():
             dcc.Store(id="cif-order-store"),
             dcc.Store(id="cif-visibility-store", data={}),
             dcc.Store(id="pawley-content-store"),
-            dcc.Store(id="riet-content-store"),
-            dcc.Download(id="pawley-download"),
-            dcc.Download(id="riet-download")
+            dcc.Store(id="riet-content-store")
         ]
     )

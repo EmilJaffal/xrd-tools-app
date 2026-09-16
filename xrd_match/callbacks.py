@@ -1261,7 +1261,7 @@ def register_callbacks(app):
         content = _build_pawley_content(xy_name, cif_entries)
         # NOTE: unlike the web app, we don't also write pawley.inp to the current
         # working directory here — inside a packaged desktop app, cwd may not be
-        # writable, and the content is already delivered via dcc.Download below.
+        # writable, and the content is already saved straight to ~/Downloads below.
         return content
 
     @app.callback(
@@ -1377,7 +1377,7 @@ def register_callbacks(app):
         return content
 
     @app.callback(
-        Output("pawley-download", "data"),
+        Output("pawley-save-status", "children"),
         Input("pawley-content-store", "data"),
         State("upload-xy", "filename"),
         prevent_initial_call=True
@@ -1392,14 +1392,20 @@ def register_callbacks(app):
             if stem and ext.lower() == ".xy":
                 download_name = f"{stem}_pawley.inp"
 
-        return {
-            "content": content,
-            "filename": download_name,
-            "type": "text/plain"
-        }
+        try:
+            # Same rationale as the plot PNG: write straight to ~/Downloads
+            # server-side instead of routing through dcc.Download's
+            # webview save panel, which is unreliable in the packaged app.
+            downloads_dir = Path.home() / "Downloads"
+            downloads_dir.mkdir(parents=True, exist_ok=True)
+            (downloads_dir / download_name).write_text(content)
+            return f"✓ Saved {download_name} to Downloads"
+        except Exception as e:
+            print("Error saving pawley .inp:", e)
+            return "✗ couldn't save .inp"
 
     @app.callback(
-        Output("riet-download", "data"),
+        Output("riet-save-status", "children"),
         Input("riet-content-store", "data"),
         State("upload-xy", "filename"),
         prevent_initial_call=True
@@ -1414,11 +1420,14 @@ def register_callbacks(app):
             if stem and ext.lower() == ".xy":
                 download_name = f"{stem}_Riet.inp"
 
-        return {
-            "content": content,
-            "filename": download_name,
-            "type": "text/plain"
-        }
+        try:
+            downloads_dir = Path.home() / "Downloads"
+            downloads_dir.mkdir(parents=True, exist_ok=True)
+            (downloads_dir / download_name).write_text(content)
+            return f"✓ Saved {download_name} to Downloads"
+        except Exception as e:
+            print("Error saving riet .inp:", e)
+            return "✗ couldn't save .inp"
 
     app.clientside_callback(
         """
