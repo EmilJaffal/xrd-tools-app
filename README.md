@@ -32,9 +32,10 @@ python app_factory.py              # then open http://127.0.0.1:8050
 
 **macOS** (works on this machine):
 ```bash
-./build/build_mac.sh
-open "dist/XRD Tools.app"
+./build/build_mac.sh            # builds, signs, and installs to /Applications
+open "/Applications/XRD Tools.app"
 ```
+The script builds into `dist/` (a gitignored workspace), signs a copy outside the repo, and installs it to `/Applications`, replacing any older copy. Use `NO_INSTALL=1 ./build/build_mac.sh` to leave the result in `dist/` only.
 
 **Windows** — PyInstaller can't cross-compile, so this must run *on* a Windows machine (or via the included GitHub Actions workflow, `.github/workflows/build-windows.yml`, triggered manually once this repo has a remote):
 ```bat
@@ -61,14 +62,10 @@ build/                 PyInstaller spec + build scripts (mac tested, windows scr
 
 ## Troubleshooting
 
-- **macOS build fails to code-sign** with `resource fork, Finder information, or similar detritus not allowed`: this happens when the project folder lives somewhere Finder/iCloud tags with extra metadata (e.g. under an iCloud-synced Desktop). Fix by re-signing after the build:
-  ```bash
-  xattr -cr "dist/XRD Tools.app"
-  codesign -s - --force --deep "dist/XRD Tools.app"
-  ```
+- **`resource fork, Finder information, or similar detritus not allowed`** in the build log: this comes from PyInstaller's own signing step when the project folder lives somewhere Finder/iCloud tags with extra metadata (e.g. an iCloud-synced Desktop). It's harmless: `build_mac.sh` re-signs a copy in a temp folder outside iCloud afterwards, and that's the copy it installs.
 - **`.cif`/`.xy` upload buttons don't filter file types in the native window**: the macOS open panel can only grey out files it recognizes by a registered type, and `.cif`/`.xy` aren't standard system types — `build/xrd_tools.spec` registers them as custom UTIs, but a fresh build may need Launch Services to pick that up:
   ```bash
-  /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -f "dist/XRD Tools.app"
+  /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -f "/Applications/XRD Tools.app"
   ```
   Regardless of what the picker shows, uploading the wrong file type is always rejected with an on-screen error — this only affects how much the OS dialog itself grays out.
 

@@ -50,16 +50,37 @@ KALEIDO_EOF
 fi
 
 # PyInstaller's own ad-hoc signing step can fail with "resource fork, Finder
-# information, or similar detritus not allowed" for the same iCloud-sync
-# reason above — strip those extended attributes and re-sign so the app
-# isn't left with a broken/partial signature. Signing also has to happen
-# *after* the kaleido patch above, or the rewritten file would invalidate it.
-if [ -d "dist/XRD Tools.app" ]; then
-    xattr -cr "dist/XRD Tools.app" 2>/dev/null || true
-    codesign -s - --force --deep "dist/XRD Tools.app"
-    /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -f "dist/XRD Tools.app" 2>/dev/null || true
+# information, or similar detritus not allowed" because this repo lives on
+# the iCloud-synced Desktop, which keeps re-adding extended attributes inside
+# dist/ — even straight after `xattr -cr`. So sign a copy in a temp dir
+# outside iCloud instead, then install that signed copy to /Applications
+# (and put it back in dist/ so dist/ never holds a broken signature).
+# Signing also has to happen *after* the kaleido patch above, or the
+# rewritten file would invalidate it. Set NO_INSTALL=1 to skip /Applications.
+APP_NAME="XRD Tools"
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister
+if [ -d "dist/$APP_NAME.app" ]; then
+    SIGN_DIR="$(mktemp -d)"
+    trap 'rm -rf "$SIGN_DIR"' EXIT
+    ditto --norsrc --noextattr "dist/$APP_NAME.app" "$SIGN_DIR/$APP_NAME.app"
+    xattr -cr "$SIGN_DIR/$APP_NAME.app"
+    codesign -s - --force --deep "$SIGN_DIR/$APP_NAME.app"
+    codesign -v "$SIGN_DIR/$APP_NAME.app"
+
+    rm -rf "dist/$APP_NAME.app"
+    ditto --norsrc --noextattr "$SIGN_DIR/$APP_NAME.app" "dist/$APP_NAME.app"
+
+    if [ "${NO_INSTALL:-0}" != "1" ]; then
+        rm -rf "/Applications/$APP_NAME.app"
+        ditto --norsrc --noextattr "$SIGN_DIR/$APP_NAME.app" "/Applications/$APP_NAME.app"
+        "$LSREGISTER" -f "/Applications/$APP_NAME.app" 2>/dev/null || true
+        echo
+        echo "Done. Installed to /Applications/$APP_NAME.app — open it with:"
+        echo "  open \"/Applications/$APP_NAME.app\""
+        exit 0
+    fi
 fi
 
 echo
 echo "Done. Open it with:"
-echo "  open \"dist/XRD Tools.app\""
+echo "  open \"dist/$APP_NAME.app\""
