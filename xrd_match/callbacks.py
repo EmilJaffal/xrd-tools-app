@@ -197,7 +197,9 @@ def register_callbacks(app):
         # behind — that mismatch is what made a freshly-uploaded CIF (visible
         # by default) sometimes start on a stale "Show" button.
         [Output(f"toggle-{i}", "children", allow_duplicate=True) for i in range(1, 7)] +
-        [Output(f"toggle-{i}", "style", allow_duplicate=True) for i in range(1, 7)],
+        [Output(f"toggle-{i}", "style", allow_duplicate=True) for i in range(1, 7)] +
+        [Output(f"intensity-{i}", "value", allow_duplicate=True) for i in range(1, 7)] +
+        [Output(f"background-{i}", "value", allow_duplicate=True) for i in range(1, 7)],
         Input("cif-store", "data"),
         Input("cif-order-store", "data"),
         [State(f"lattice-{i}-a", "value") for i in range(1, 7)] +
@@ -207,18 +209,31 @@ def register_callbacks(app):
         [State(f"lattice-{i}-beta", "value") for i in range(1, 7)] +
         [State(f"lattice-{i}-gamma", "value") for i in range(1, 7)] +
         [State(f"lattice-params-header-{i}", "title") for i in range(1, 7)] +
-        [State("cif-visibility-store", "data")],
+        [State("cif-visibility-store", "data")] +
+        [State(f"lattice-scale-{i}", "value") for i in range(1, 7)] +
+        [State(f"lattice-{i}-a", "style") for i in range(1, 7)] +
+        [State(f"lattice-{i}-b", "style") for i in range(1, 7)] +
+        [State(f"lattice-{i}-c", "style") for i in range(1, 7)] +
+        [State(f"intensity-{i}", "value") for i in range(1, 7)] +
+        [State(f"background-{i}", "value") for i in range(1, 7)],
         prevent_initial_call='initial_duplicate'
     )
-    def update_lattice_params_blocks(cif_data, cif_order,
-                                     a1, a2, a3, a4, a5, a6,
-                                     b1, b2, b3, b4, b5, b6,
-                                     c1, c2, c3, c4, c5, c6,
-                                     alpha1, alpha2, alpha3, alpha4, alpha5, alpha6,
-                                     beta1, beta2, beta3, beta4, beta5, beta6,
-                                     gamma1, gamma2, gamma3, gamma4, gamma5, gamma6,
-                                     prev_header1, prev_header2, prev_header3, prev_header4, prev_header5, prev_header6,
-                                     visibility_state):
+    def update_lattice_params_blocks(cif_data, cif_order, *states):
+        current_a = list(states[0:6])
+        current_b = list(states[6:12])
+        current_c = list(states[12:18])
+        current_alpha = list(states[18:24])
+        current_beta = list(states[24:30])
+        current_gamma = list(states[30:36])
+        prev_headers = list(states[36:42])
+        visibility_state = states[42] or {}
+        current_scale = list(states[43:49])
+        current_a_style = list(states[49:55])
+        current_b_style = list(states[55:61])
+        current_c_style = list(states[61:67])
+        current_intensity = list(states[67:73])
+        current_background = list(states[73:79])
+
         style_outputs = []
         header_outputs = []
         title_outputs = []
@@ -234,14 +249,8 @@ def register_callbacks(app):
         c_style_outputs = []
         toggle_text_outputs = []
         toggle_style_outputs = []
-        current_a = [a1, a2, a3, a4, a5, a6]
-        current_b = [b1, b2, b3, b4, b5, b6]
-        current_c = [c1, c2, c3, c4, c5, c6]
-        current_alpha = [alpha1, alpha2, alpha3, alpha4, alpha5, alpha6]
-        current_beta = [beta1, beta2, beta3, beta4, beta5, beta6]
-        current_gamma = [gamma1, gamma2, gamma3, gamma4, gamma5, gamma6]
-        prev_headers = [prev_header1, prev_header2, prev_header3, prev_header4, prev_header5, prev_header6]
-        visibility_state = visibility_state or {}
+        intensity_outputs = []
+        background_outputs = []
 
         # Plain (non-shifted) input style, matching reset_block's default.
         default_field_style = {
@@ -250,9 +259,29 @@ def register_callbacks(app):
             "fontSize": "14px",
             "margin": "6px 0 0"
         }
+        # Slider defaults, matching layout.py.
+        default_scale = 0
+        default_intensity = 100
+        default_background = 0
+
+        def carry(out, current, src, dst, default):
+            # Emit the value from slot `src` into slot `dst`, skipping the
+            # write when nothing would change so dependent callbacks (e.g. the
+            # unit-cell shift, which recomputes a/b/c) don't fire needlessly.
+            value = current[src] if src is not None else default
+            if value is None:
+                value = default
+            out.append(no_update if value == current[dst] else value)
 
         file_names = cif_order if cif_order else []
         num_files = len(file_names)
+
+        # Which slot each CIF occupied before this update. When a CIF above
+        # it is deleted, a CIF shifts up into a lower-numbered slot — every
+        # per-slot control (lattice values, shift, sliders) must follow the
+        # CIF rather than stay with the slot, or the CIF would silently adopt
+        # the deleted CIF's settings.
+        prev_slot = {name: j for j, name in enumerate(prev_headers) if name}
 
         for i in range(6):
             if i < num_files:
@@ -275,48 +304,27 @@ def register_callbacks(app):
                     toggle_text_outputs.append("Hide" if is_visible else "Show")
                     toggle_style_outputs.append(_toggle_button_style(is_visible))
 
-                    # A slot's *occupant* can change (e.g. a CIF earlier in the list gets
-                    # deleted and this slot's CIF shifts up) even though the slot's a/b/c/...
-                    # input boxes still hold whatever the previous occupant last displayed.
-                    # Detect that and force a fresh recompute instead of keeping stale values.
-                    slot_changed = prev_headers[i] != file_names[i]
+                    # None when this CIF is new (fresh upload) — it then starts
+                    # from its CIF lattice and default slider values.
+                    src = prev_slot.get(file_names[i])
 
-                    if slot_changed or current_a[i] is None:
-                        a_outputs.append(round(lattice.a, 4))
-                    else:
-                        a_outputs.append(current_a[i])
-                    if slot_changed or current_b[i] is None:
-                        b_outputs.append(round(lattice.b, 4))
-                    else:
-                        b_outputs.append(current_b[i])
-                    if slot_changed or current_c[i] is None:
-                        c_outputs.append(round(lattice.c, 4))
-                    else:
-                        c_outputs.append(current_c[i])
-                    if slot_changed or current_alpha[i] is None:
-                        alpha_outputs.append(round(lattice.alpha, 4))
-                    else:
-                        alpha_outputs.append(current_alpha[i])
-                    if slot_changed or current_beta[i] is None:
-                        beta_outputs.append(round(lattice.beta, 4))
-                    else:
-                        beta_outputs.append(current_beta[i])
-                    if slot_changed or current_gamma[i] is None:
-                        gamma_outputs.append(round(lattice.gamma, 4))
-                    else:
-                        gamma_outputs.append(current_gamma[i])
+                    for out, current, base in (
+                        (a_outputs, current_a, lattice.a),
+                        (b_outputs, current_b, lattice.b),
+                        (c_outputs, current_c, lattice.c),
+                        (alpha_outputs, current_alpha, lattice.alpha),
+                        (beta_outputs, current_beta, lattice.beta),
+                        (gamma_outputs, current_gamma, lattice.gamma),
+                    ):
+                        value = current[src] if src is not None else None
+                        out.append(value if value is not None else round(base, 4))
 
-                    if slot_changed:
-                        # New occupant: the old shift percentage/style no longer applies.
-                        scale_outputs.append(0)
-                        a_style_outputs.append(default_field_style)
-                        b_style_outputs.append(default_field_style)
-                        c_style_outputs.append(default_field_style)
-                    else:
-                        scale_outputs.append(no_update)
-                        a_style_outputs.append(no_update)
-                        b_style_outputs.append(no_update)
-                        c_style_outputs.append(no_update)
+                    carry(scale_outputs, current_scale, src, i, default_scale)
+                    carry(a_style_outputs, current_a_style, src, i, default_field_style)
+                    carry(b_style_outputs, current_b_style, src, i, default_field_style)
+                    carry(c_style_outputs, current_c_style, src, i, default_field_style)
+                    carry(intensity_outputs, current_intensity, src, i, default_intensity)
+                    carry(background_outputs, current_background, src, i, default_background)
                 except Exception as e:
                     print("Error parsing CIF for lattice block:", e)
                     style_outputs.append({"display": "none"})
@@ -330,10 +338,12 @@ def register_callbacks(app):
                     alpha_outputs.append(None)
                     beta_outputs.append(None)
                     gamma_outputs.append(None)
-                    scale_outputs.append(0)
+                    scale_outputs.append(default_scale)
                     a_style_outputs.append(default_field_style)
                     b_style_outputs.append(default_field_style)
                     c_style_outputs.append(default_field_style)
+                    intensity_outputs.append(default_intensity)
+                    background_outputs.append(default_background)
             else:
                 style_outputs.append({"display": "none"})
                 header_outputs.append("")
@@ -346,22 +356,19 @@ def register_callbacks(app):
                 alpha_outputs.append(None)
                 beta_outputs.append(None)
                 gamma_outputs.append(None)
-                # Reset a freed slot so it doesn't keep a stale shifted look if reused later.
-                if prev_headers[i]:
-                    scale_outputs.append(0)
-                    a_style_outputs.append(default_field_style)
-                    b_style_outputs.append(default_field_style)
-                    c_style_outputs.append(default_field_style)
-                else:
-                    scale_outputs.append(no_update)
-                    a_style_outputs.append(no_update)
-                    b_style_outputs.append(no_update)
-                    c_style_outputs.append(no_update)
+                # Reset a freed slot so it doesn't keep stale settings if reused later.
+                carry(scale_outputs, current_scale, None, i, default_scale)
+                carry(a_style_outputs, current_a_style, None, i, default_field_style)
+                carry(b_style_outputs, current_b_style, None, i, default_field_style)
+                carry(c_style_outputs, current_c_style, None, i, default_field_style)
+                carry(intensity_outputs, current_intensity, None, i, default_intensity)
+                carry(background_outputs, current_background, None, i, default_background)
 
         return (style_outputs + header_outputs + title_outputs + a_outputs + b_outputs + c_outputs +
                 alpha_outputs + beta_outputs + gamma_outputs +
                 scale_outputs + a_style_outputs + b_style_outputs + c_style_outputs +
-                toggle_text_outputs + toggle_style_outputs)
+                toggle_text_outputs + toggle_style_outputs +
+                intensity_outputs + background_outputs)
 
     # ------------------------------------------------------------------
     # Reset Button Callbacks (One per block)
@@ -1107,6 +1114,8 @@ def register_callbacks(app):
         lines.append("\t\tla 0.653817 lo 1.540596  lh 0.501844")
         lines.append("\t\tla 0.346183 lo 1.544493  lh 0.626579")
         lines.append("")
+        lines.append("\t'Zero_Error(zero,0)")
+        lines.append("")
 
         lpa_index = 1
         for idx, entry in enumerate(cif_entries):
@@ -1162,6 +1171,7 @@ def register_callbacks(app):
             lines.append(f"\t\tSimple_Axial_Model({axial},10)")
             lines.append("\t\tPhase_Density_g_on_cm3(0)")
             lines.append(f"\t\tspace_group \"{entry['space_group']}\"")
+            lines.append("\t\tweight_percent 1")
             lines.append("")
 
         return "\n".join(lines).strip() + "\n"
