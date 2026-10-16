@@ -1,0 +1,116 @@
+name: Build desktop app
+
+# Builds the macOS .dmg and Windows .zip on every push to main and every PR
+# (as downloadable workflow artifacts), and publishes both to a GitHub
+# Release when a `v*` tag is pushed. PyInstaller can't cross-compile, so
+# each platform builds on its own runner.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller build/xrd_tools.spec --noconfirm --distpath dist --workpath build_output
+
+      - name: Patch kaleido's bundled launcher script
+        # kaleido 0.2.1's launcher uses an unquoted `cd $DIR`, which breaks
+        # PNG export whenever the app path contains a space -- which
+        # "XRD Tools.app" always does. Same rewrite as build/build_mac.sh.
+        run: |
+          launcher="dist/XRD Tools.app/Contents/Resources/kaleido/executable/kaleido"
+          test -f "$launcher"
+          cat > "$launcher" <<'KALEIDO_EOF'
+          #!/bin/bash
+          DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+          cd "$DIR"
+          exec "$DIR/bin/kaleido" "$@"
+          KALEIDO_EOF
+          chmod +x "$launcher"
+
+      - name: Re-sign app
+        # The kaleido patch above edits a file PyInstaller already sealed
+        # into its ad-hoc signature; without re-signing, macOS reports a
+        # downloaded copy as "damaged" with no way to open it.
+        run: |
+          APP="dist/XRD Tools.app"
+          xattr -cr "$APP"
+          codesign -s - --force --deep "$APP"
+          codesign --verify --deep --strict "$APP"
+
+      - name: Create DMG
+        run: |
+          APP_NAME="XRD Tools"
+          STAGE_DIR="$(mktemp -d)"
+          ditto "dist/$APP_NAME.app" "$STAGE_DIR/$APP_NAME.app"
+          ln -s /Applications "$STAGE_DIR/Applications"
+          cp HOW_TO_OPEN.md "$STAGE_DIR/How To Open.txt"
+          hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE_DIR" -ov -format UDZO "dist/xrd-tools-mac.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xrd-tools-mac
+          path: dist/xrd-tools-mac.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller build/xrd_tools.spec --noconfirm --distpath dist --workpath build_output
+
+      - name: Zip build
+        shell: pwsh
+        run: |
+          Copy-Item "HOW_TO_OPEN.md" "dist/XRD Tools/How To Open.txt"
+          Compress-Archive -Path "dist/XRD Tools" -DestinationPath "dist/xrd-tools-windows.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xrd-tools-windows
+          path: dist/xrd-tools-windows.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/xrd-tools-mac/*.dmg
+            artifacts/xrd-tools-windows/*.zip

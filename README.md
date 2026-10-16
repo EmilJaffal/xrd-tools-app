@@ -7,7 +7,22 @@ A standalone desktop app combining two tools as tabs of one window:
 
 Both are still ordinary Dash apps under the hood; `app_factory.py` mounts them as two tabs of a single Dash instance, and `desktop_main.py` wraps that in a native window via [pywebview](https://pywebview.flowrl.com/) instead of a browser tab.
 
-## Installation
+## Download and run (no Python needed)
+
+Grab the build for your platform from the [latest release](https://github.com/EmilJaffal/xrd-tools-app/releases/latest):
+
+- **macOS** (Apple Silicon only): `xrd-tools-mac.dmg` → open it, drag **XRD Tools** into Applications, then launch it from there or Spotlight.
+- **Windows**: `xrd-tools-windows.zip` → extract it anywhere, then run `XRD Tools.exe` inside the extracted folder.
+
+**First-launch warnings are expected** — the builds aren't signed with a paid developer certificate:
+- macOS: double-click the app, click **Done** on the "Not Opened" dialog, then go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway** next to "XRD Tools was blocked", and confirm with your password. (On macOS 15 and later, right-click → Open no longer bypasses this.)
+- Windows (SmartScreen): click **More info** → **Run anyway**. If the window comes up blank, install the [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
+
+[HOW_TO_OPEN.md](HOW_TO_OPEN.md) is a plain-language version of these steps; it's also bundled inside both downloads as "How To Open.txt".
+
+> The Windows build is produced by CI but hasn't yet been run on a real Windows machine — treat it as untested until it has.
+
+## Installation (from source)
 
 Requires **Python 3.10+**.
 
@@ -37,11 +52,15 @@ open "/Applications/XRD Tools.app"
 ```
 The script builds into `dist/` (a gitignored workspace), signs a copy outside the repo, and installs it to `/Applications`, replacing any older copy. Use `NO_INSTALL=1 ./build/build_mac.sh` to leave the result in `dist/` only.
 
-**Windows** — PyInstaller can't cross-compile, so this must run *on* a Windows machine (or via the included GitHub Actions workflow, `.github/workflows/build-windows.yml`, triggered manually once this repo has a remote):
+**Windows** — PyInstaller can't cross-compile, so this must run *on* a Windows machine (or let CI do it, below):
 ```bat
 build\build_windows.bat
 dist\"XRD Tools"\"XRD Tools.exe"
 ```
+
+### CI and releases
+
+[.github/workflows/build.yml](.github/workflows/build.yml) builds the macOS `.dmg` and Windows `.zip` on every push to `main` and every PR (downloadable from the run's **Artifacts**). Pushing a tag like `v1.0.0` also publishes both to a [GitHub Release](https://github.com/EmilJaffal/xrd-tools-app/releases). Bump `CFBundleShortVersionString` in [build/xrd_tools.spec](build/xrd_tools.spec) to match before tagging.
 
 ## Layout
 
@@ -52,6 +71,8 @@ app_factory.py         builds the one Dash() instance, mounts both tabs
 desktop_main.py         pywebview entrypoint (native window)
 assets/                CSS scoped per tab (.tab-xrd-match / .tab-multipattern) + shared fonts
 build/                 PyInstaller spec + build scripts (mac tested, windows scripted)
+HOW_TO_OPEN.md         plain-language open/install guide, bundled into every build
+.github/workflows/     CI: builds both platforms; publishes a Release on `v*` tags
 ```
 
 ## Notes
