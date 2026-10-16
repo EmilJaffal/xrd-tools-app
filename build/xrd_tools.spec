@@ -6,7 +6,7 @@
 #
 # NOTE: PyInstaller does not cross-compile — building a Windows .exe requires
 # running the equivalent command on an actual Windows machine (see
-# build/build_windows.bat), or via the CI workflow in build/github-workflows/.
+# build/build_windows.bat), or via CI (.github/workflows/build.yml).
 
 import sys
 from pathlib import Path
@@ -84,7 +84,7 @@ if sys.platform == "darwin":
         bundle_identifier="com.emiljaffal.xrdtools",
         info_plist={
             "NSHighResolutionCapable": True,
-            "CFBundleShortVersionString": "0.1.0",
+            "CFBundleShortVersionString": "1.0.0",
             # Register .cif/.xy as real (exported) UTIs so the native macOS
             # open panel — used for the upload buttons in xrd_match's UI —
             # can actually grey out everything else. Without this, ".cif"/
