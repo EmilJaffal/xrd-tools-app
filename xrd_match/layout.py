@@ -325,7 +325,24 @@ def create_layout():
                 ], style={"fontSize": "13px", "width": "31%", "marginRight": "16px", "display": "inline-block", "verticalAlign": "middle"}),
 
                 html.Div([
-                    html.Div("Experimental intensity scaling", className="field-label", style={"marginBottom": "4px"}),
+                    html.Div([
+                        html.Div("Experimental intensity scaling", className="field-label"),
+                        # Re-normalizes the experimental pattern to the
+                        # tallest point *inside the selected 2θ range*
+                        # (instead of the whole file). For patterns with a
+                        # sharp low-angle background: crop it off with the
+                        # 2θ range slider, tick this, and the real peaks
+                        # fill the plot. The slider above still applies on
+                        # top, as a percentage of that in-range maximum.
+                        dcc.Checklist(
+                            id="exp-autoscale-check",
+                            options=[{"label": "Auto-scale to 2θ range", "value": "auto"}],
+                            value=[],
+                            className="green-check",
+                            inputStyle={"marginRight": "5px"},
+                            style={"marginLeft": "12px", "fontSize": "12px"},
+                        ),
+                    ], style={"display": "flex", "alignItems": "center", "marginBottom": "4px"}),
                     dcc.Slider(
                         id="exp-intensity-slider",
                         min=0,

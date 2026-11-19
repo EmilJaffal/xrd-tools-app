@@ -569,7 +569,8 @@ def register_callbacks(app):
          Output("riet-content-store", "data", allow_duplicate=True),
          Output("opacity-slider", "value"),
          Output("exp-intensity-slider", "value"),
-         Output("xrange-slider", "value")] +
+         Output("xrange-slider", "value"),
+         Output("exp-autoscale-check", "value")] +
         [Output(f"intensity-{i}", "value") for i in range(1, 7)] +
         [Output(f"background-{i}", "value") for i in range(1, 7)],
         Input("refresh-all-btn", "n_clicks"),
@@ -577,9 +578,9 @@ def register_callbacks(app):
     )
     def refresh_all(n_clicks):
         if not n_clicks:
-            return [no_update] * 25
+            return [no_update] * 26
         return (
-            [None, None, None, None, None, [], {}, None, None, None, 0.9, 100, [10, 120]]
+            [None, None, None, None, None, [], {}, None, None, None, 0.9, 100, [10, 120], []]
             + [100] * 6  # intensity sliders back to 100
             + [0] * 6    # background sliders back to 0
         )
@@ -594,6 +595,7 @@ def register_callbacks(app):
             Input("opacity-slider", "value"),
             Input("exp-intensity-slider", "value"),  
             Input("xrange-slider", "value"),
+            Input("exp-autoscale-check", "value"),
             # Lattice parameter inputs for blocks 1 to 6.
             Input("lattice-1-a", "value"),
             Input("lattice-2-a", "value"),
@@ -655,7 +657,7 @@ def register_callbacks(app):
         State("cif-order-store", "data"),
         State("upload-xy", "filename")
     )
-    def update_xrd_plot(xy_data, opacity, exp_intensity, xrange,
+    def update_xrd_plot(xy_data, opacity, exp_intensity, xrange, exp_autoscale,
                         a1, a2, a3, a4, a5, a6,
                         b1, b2, b3, b4, b5, b6,
                         c1, c2, c3, c4, c5, c6,
@@ -682,14 +684,24 @@ def register_callbacks(app):
 
                 # Create DataFrame from the parsed data
                 exp_data = pd.DataFrame(parsed_data['data'], columns=parsed_data['columns'], index=parsed_data['index'])
-                # Scale experimental intensity
-                if exp_intensity is not None and exp_data is not None:
-                    exp_data['intensity'] = exp_data['intensity'] * (exp_intensity / 100)
-
                 # Filter experimental data based on xrange
-                col_candidates = ['two_theta', 'x', 'angle']
+                col_candidates = ['2_theta', 'two_theta', 'x', 'angle']
                 col = next((c for c in col_candidates if c in exp_data.columns), exp_data.columns[0])
-                exp_data = exp_data[(exp_data[col] >= xrange_min) & (exp_data[col] <= xrange_max)]
+                exp_data = exp_data[(exp_data[col] >= xrange_min) & (exp_data[col] <= xrange_max)].copy()
+
+                # Auto-scale: the stored pattern is normalized to its global
+                # max, which for a sharp low-angle background is that
+                # background, leaving the real peaks tiny. Re-normalize to
+                # the tallest point inside the selected 2θ range instead, so
+                # cropping the background off makes the peaks fill the plot.
+                if exp_autoscale and "auto" in exp_autoscale and not exp_data.empty:
+                    window_max = exp_data['intensity'].max()
+                    if window_max > 0:
+                        exp_data['intensity'] = exp_data['intensity'] / window_max * 100
+
+                # Scale experimental intensity (on top of auto-scale, if on)
+                if exp_intensity is not None:
+                    exp_data['intensity'] = exp_data['intensity'] * (exp_intensity / 100)
 
             except ValueError as e:
                 exp_data = None
