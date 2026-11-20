@@ -240,3 +240,20 @@ body, .tab-xrd-match, .tab-multipattern {
    inline widths/marks still apply) but keep the accent color consistent. */
 .rc-slider-track, .rc-slider-dot-active { background-color: var(--accent) !important; }
 .rc-slider-handle { border-color: var(--accent) !important; }
+
+/* Green checkbox (e.g. "Auto-scale to 2θ range" next to the experimental
+   intensity slider on the XRD Match tab). */
+.green-check input[type="checkbox"] {
+    accent-color: #16a34a;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.green-check label {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    color: #16a34a;
+    font-weight: 600;
+}
