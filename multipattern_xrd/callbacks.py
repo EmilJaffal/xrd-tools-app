@@ -1,12 +1,13 @@
 import dash
 import plotly.graph_objects as go
-from dash import dcc, Input, Output, State, ALL, callback_context
+from dash import Input, Output, State, ALL, callback_context
 import plotly.io as pio
 import numpy as np
 import io
 from dash import html
 import re
 import json
+from pathlib import Path
 
 from .utils import generate_figure, parse_contents
 from .layout import create_file_control, create_upload_component
@@ -43,20 +44,81 @@ def compute_default_angles(files):
         return float(min(all_angles)), float(max(all_angles))
     return 10, 90  # Fallback defaults if no valid data is found.
 
+def snapshot_settings(files, bg_values, int_values):
+    """Copy each file entry with its current Level/Intensity slider values
+    stored on it ("bg"/"int"). The per-file controls are rebuilt from the file
+    store whenever files are added, removed or reordered, so without this every
+    pattern would snap back to the defaults on each of those actions."""
+    files = [dict(f) for f in (files or [])]
+    if bg_values and len(bg_values) == len(files):
+        for f, v in zip(files, bg_values):
+            f["bg"] = v
+    if int_values and len(int_values) == len(files):
+        for f, v in zip(files, int_values):
+            f["int"] = v
+    return files
+
+
+def slider_values(files, bg_values, int_values, prefer_stored=False):
+    """Level/Intensity per file for plotting. Falls back to the values stored
+    on the file entries when the live sliders don't line up with the files —
+    i.e. the store just changed and the controls haven't been rebuilt yet."""
+    if prefer_stored or not bg_values or len(bg_values) != len(files):
+        bg_values = [f.get("bg", 0) for f in files]
+    if prefer_stored or not int_values or len(int_values) != len(files):
+        int_values = [f.get("int", 100) for f in files]
+    return bg_values, int_values
+
+
+def unique_download_path(filename):
+    """~/Downloads/<filename>, adding " (1)", " (2)", ... instead of
+    overwriting an earlier plot — the same way a browser download would."""
+    downloads_dir = Path.home() / "Downloads"
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    stem, suffix = Path(filename).stem, Path(filename).suffix
+    path = downloads_dir / filename
+    n = 1
+    while path.exists():
+        path = downloads_dir / f"{stem} ({n}){suffix}"
+        n += 1
+    return path
+
+
+def triggered_click(ctx, button_types):
+    """(index, type) of the pattern-matched button that was actually clicked,
+    or None. Rebuilding the per-file controls mounts fresh buttons with
+    n_clicks=0, which Dash also reports as a trigger — those must be ignored,
+    or e.g. adding a file would act like clicking the first row's buttons."""
+    if not ctx.triggered:
+        return None
+    trig = ctx.triggered[0]
+    if not trig.get('value'):
+        return None
+    try:
+        triggered_id = json.loads(trig.get('prop_id', '').split('.')[0])
+    except Exception:
+        return None
+    if not isinstance(triggered_id, dict) or triggered_id.get('type') not in button_types:
+        return None
+    return triggered_id.get('index'), triggered_id.get('type')
+
+
 def register_callbacks(app):
     # Callback: Update the file store when files are uploaded.
     @app.callback(
         Output("file-store", "data"),
         Input("upload-data", "contents"),
         State("upload-data", "filename"),
-        State("file-store", "data")
+        State("file-store", "data"),
+        State({'type': 'bg-slider', 'index': ALL}, 'value'),
+        State({'type': 'int-slider', 'index': ALL}, 'value'),
     )
-    def update_file_store(upload_contents, upload_filenames, current_files):
+    def update_file_store(upload_contents, upload_filenames, current_files, bg_values, int_values):
         # Reset swaps in a fresh upload component (contents=None), which
         # re-fires this callback — nothing was uploaded, so leave the store alone.
         if upload_contents is None:
             raise dash.exceptions.PreventUpdate
-        current_files = current_files or []
+        current_files = snapshot_settings(current_files, bg_values, int_values)
         if upload_contents is not None:
             # Normalize to list.
             if not isinstance(upload_contents, list):
@@ -85,63 +147,42 @@ def register_callbacks(app):
     def update_per_file_controls(files):
         if not files:
             return []
-        return [create_file_control(i, file["filename"]) for i, file in enumerate(files)]
+        return [
+            create_file_control(i, file["filename"], file.get("bg", 0), file.get("int", 100))
+            for i, file in enumerate(files)
+        ]
 
+    # Callback: Move a pattern up/down (legend + stacking order) or remove it.
     @app.callback(
         Output("file-store", "data", allow_duplicate=True),
-        Output({'type': 'bg-slider', 'index': ALL}, 'value', allow_duplicate=True),
-        Output({'type': 'int-slider', 'index': ALL}, 'value', allow_duplicate=True),
         Input({'type': 'move-up-button', 'index': ALL}, 'n_clicks'),
         Input({'type': 'move-down-button', 'index': ALL}, 'n_clicks'),
+        Input({'type': 'remove-button', 'index': ALL}, 'n_clicks'),
         State("file-store", "data"),
         State({'type': 'bg-slider', 'index': ALL}, 'value'),
         State({'type': 'int-slider', 'index': ALL}, 'value'),
         prevent_initial_call=True
     )
-    def reorder_files_for_legend(up_clicks, down_clicks, files, bg_values, int_values):
-        if not files:
+    def reorder_or_remove_file(up_clicks, down_clicks, remove_clicks, files, bg_values, int_values):
+        clicked = triggered_click(
+            callback_context, ('move-up-button', 'move-down-button', 'remove-button'))
+        if not files or clicked is None:
+            raise dash.exceptions.PreventUpdate
+        idx, button_type = clicked
+        if idx is None or idx < 0 or idx >= len(files):
             raise dash.exceptions.PreventUpdate
 
-        ctx = callback_context
-        if not ctx.triggered:
-            raise dash.exceptions.PreventUpdate
+        files = snapshot_settings(files, bg_values, int_values)
 
-        triggered_prop = ctx.triggered[0].get('prop_id', '')
-        triggered_id_part = triggered_prop.split('.')[0] if triggered_prop else ''
-        try:
-            triggered_id = json.loads(triggered_id_part)
-        except Exception:
-            triggered_id = None
-
-        if not isinstance(triggered_id, dict):
-            raise dash.exceptions.PreventUpdate
-
-        idx = triggered_id.get('index')
-        button_type = triggered_id.get('type')
-        if idx is None or button_type not in ('move-up-button', 'move-down-button'):
-            raise dash.exceptions.PreventUpdate
-
-        if idx < 0 or idx >= len(files):
-            raise dash.exceptions.PreventUpdate
-
-        if not bg_values or len(bg_values) != len(files):
-            bg_values = [0] * len(files)
-        if not int_values or len(int_values) != len(files):
-            int_values = [100] * len(files)
+        if button_type == 'remove-button':
+            del files[idx]
+            return files
 
         target_idx = idx - 1 if button_type == 'move-up-button' else idx + 1
         if target_idx < 0 or target_idx >= len(files):
             raise dash.exceptions.PreventUpdate
-
-        reordered_files = files.copy()
-        reordered_bg = bg_values.copy()
-        reordered_int = int_values.copy()
-
-        reordered_files[idx], reordered_files[target_idx] = reordered_files[target_idx], reordered_files[idx]
-        reordered_bg[idx], reordered_bg[target_idx] = reordered_bg[target_idx], reordered_bg[idx]
-        reordered_int[idx], reordered_int[target_idx] = reordered_int[target_idx], reordered_int[idx]
-
-        return reordered_files, reordered_bg, reordered_int
+        files[idx], files[target_idx] = files[target_idx], files[idx]
+        return files
 
     # Callback: Toggle the legend store (flip True/False) when legend button is clicked.
     @app.callback(
@@ -166,11 +207,13 @@ def register_callbacks(app):
     def update_graph(angle_range, global_sep, bg_values, int_values, files, show_legend):
         if not files:
             return go.Figure()
-        # Ensure slider values lists match the number of files.
-        if not bg_values or len(bg_values) != len(files):
-            bg_values = [0] * len(files)
-        if not int_values or len(int_values) != len(files):
-            int_values = [100] * len(files)
+        # When the file store itself changed (add/remove/reorder), the live
+        # sliders still belong to the previous file list — plot with the
+        # settings stored on each file until the controls are rebuilt.
+        file_store_changed = any(
+            t['prop_id'].startswith('file-store') for t in callback_context.triggered)
+        bg_values, int_values = slider_values(
+            files, bg_values, int_values, prefer_stored=file_store_changed)
 
         angle_min, angle_max = angle_range  # Extract min and max from the range slider
         fig = generate_figure(angle_min, angle_max, global_sep, bg_values, int_values, files)
@@ -269,7 +312,7 @@ def register_callbacks(app):
 
     # Callback: Save the current plot in high resolution using the selected ratio.
     @app.callback(
-        Output("download", "data"),
+        Output("save-status", "children"),
         Input("save-white-button", "n_clicks"),
         Input("save-transparent-button", "n_clicks"),
         State('angle-range-slider', 'value'),
@@ -293,15 +336,14 @@ def register_callbacks(app):
         print(f"Triggered by: {trigger}")
 
         if not files:
-            print("No files available")
-            return dash.no_update
+            return "✗ nothing to save yet"
+        bg_values, int_values = slider_values(files, bg_values, int_values)
 
         angle_min, angle_max = angle_range
         print(f"Angle range: {angle_min} - {angle_max}")
 
         # Generate the figure
         fig = generate_figure(angle_min, angle_max, global_sep, bg_values, int_values, files)
-        print(f"Generated figure: {fig}")
 
         # Set background based on button clicked
         if trigger.startswith("save-transparent-button"):
@@ -372,16 +414,19 @@ def register_callbacks(app):
 
         if img_bytes is None:
             print(f"Error generating image after all fallbacks: {last_error}")
-            raise dash.exceptions.PreventUpdate
+            return "✗ couldn't save plot"
 
-        def write_bytes(bytes_io):
-            bytes_io.write(img_bytes)
-
-        # Set filename
-        if trigger.startswith("save-white-button"):
-            filename = "plot_white.png"
-        else:
-            filename = "plot_transparent.png"
-
-        print(f"Saving file: {filename}")
-        return dcc.send_bytes(write_bytes, filename)
+        filename = ("multipattern_white.png" if trigger.startswith("save-white-button")
+                    else "multipattern_transparent.png")
+        # Write straight to ~/Downloads server-side, like XRD Match's plot
+        # save, instead of a dcc.Download: in the desktop window that goes
+        # through WKWebView's download handling and pops a native save panel
+        # every time. A direct write behaves the same in dev and packaged.
+        try:
+            path = unique_download_path(filename)
+            path.write_bytes(img_bytes)
+        except Exception as e:
+            print(f"Error saving plot: {e}")
+            return "✗ couldn't save plot"
+        print(f"Saved plot to {path}")
+        return f"✓ Saved {path.name} to Downloads"
