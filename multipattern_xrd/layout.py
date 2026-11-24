@@ -1,8 +1,10 @@
 from dash import dcc, html
 
-def create_file_control(index, filename):
+def create_file_control(index, filename, bg=0, intensity=100):
     """
     Creates the layout for per-file controls.
+    `bg`/`intensity` seed the sliders so a pattern keeps its settings when the
+    controls are rebuilt after another file is added, removed or reordered.
     Removes the '.xy' extension (case insensitive) from the filename if it exists.
     The filename is rendered in a fixed-width container with text truncation.
     """
@@ -30,7 +32,7 @@ def create_file_control(index, filename):
                 min=-10,
                 max=50,
                 step=0.5,
-                value=0,
+                value=bg,
                 updatemode="drag",
                 marks={
                     -10: {'label': "-10", 'style': {'fontSize': '11px'}},
@@ -48,7 +50,7 @@ def create_file_control(index, filename):
                 min=1,
                 max=200,
                 step=1,
-                value=100,
+                value=intensity,
                 updatemode="drag",
                 marks={
                     1:   {'label': "1",   'style': {'fontSize': '11px'}},
@@ -75,6 +77,14 @@ def create_file_control(index, filename):
                     n_clicks=0,
                     title='Move down in legend',
                     className="btn btn-neutral",
+                    style={'width': '32px', 'height': '32px', 'padding': '0', 'marginLeft': '6px'}
+                ),
+                html.Button(
+                    "✕",
+                    id={'type': 'remove-button', 'index': index},
+                    n_clicks=0,
+                    title='Remove this pattern',
+                    className="btn btn-danger",
                     style={'width': '32px', 'height': '32px', 'padding': '0', 'marginLeft': '6px'}
                 )
             ],
@@ -229,7 +239,12 @@ def create_layout(app):
         className="btn btn-accent",
         style={'padding': '10px 18px'}
     )
-    download_component = dcc.Download(id="download")
+    # Plots are written straight to ~/Downloads (see save_plot), so instead of
+    # a dcc.Download this just reports where the file went.
+    save_status = html.Span(
+        id="save-status",
+        style={'marginLeft': '10px', 'color': '#16a34a', 'fontSize': '13px'}
+    )
 
     # Arrange Reset, Legend, and Save buttons on the same horizontal line.
     button_row = html.Div(
@@ -242,7 +257,8 @@ def create_layout(app):
                     save_transparent_button
                 ],
                 style={'display': 'flex', 'gap': '8px', 'marginLeft': '20px'}
-            )
+            ),
+            save_status
         ],
         style={'display': 'flex', 'alignItems': 'center', 'margin': '10px'}
     )
@@ -276,7 +292,6 @@ def create_layout(app):
     controls_container = html.Div(
         [
             button_row,
-            download_component,
             ratio_controls,
             global_controls,
             html.Hr(style={'border': 'none', 'borderTop': '1px solid #e3e5eb', 'margin': '16px 0'}),
