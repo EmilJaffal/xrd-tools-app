@@ -82,9 +82,19 @@ def create_file_control(index, filename):
         )
     ], className="panel-row", style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '10px'})
 
-def create_layout(app):
-    # Upload component for drag & drop .xy files with a light grey background.
-    upload_component = dcc.Upload(
+def create_upload_component(generation=0):
+    """Upload component for drag & drop .xy files with a light grey background.
+
+    A factory (rather than a one-off instance) so Reset can swap in a fresh
+    one: remounting resets the hidden <input type=file>, otherwise picking the
+    same files again after a Reset fires no change event and nothing loads.
+    The changing React `key` is what forces the remount — an identical
+    component tree would otherwise be reconciled in place, keeping the input."""
+    return html.Div(_upload(), key=f"upload-{generation}")
+
+
+def _upload():
+    return dcc.Upload(
         id="upload-data",
         accept=".xy",
         children=html.Div(
@@ -103,6 +113,10 @@ def create_layout(app):
         },
         multiple=True
     )
+
+
+def create_layout(app):
+    upload_component = html.Div(create_upload_component(), id="upload-wrapper")
 
     # Store to hold the current file list.
     file_store = dcc.Store(id="file-store", data=[])
@@ -187,6 +201,7 @@ def create_layout(app):
         "Reset",
         id="reset-button",
         n_clicks=0,
+        title="Clear all loaded patterns and restore default settings",
         className="btn btn-neutral",
         style={'padding': '10px 18px'}
     )

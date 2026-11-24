@@ -9,7 +9,7 @@ import re
 import json
 
 from .utils import generate_figure, parse_contents
-from .layout import create_file_control
+from .layout import create_file_control, create_upload_component
 
 Y_AXIS_DOMAIN_75 = [0.125, 0.875]
 
@@ -52,6 +52,10 @@ def register_callbacks(app):
         State("file-store", "data")
     )
     def update_file_store(upload_contents, upload_filenames, current_files):
+        # Reset swaps in a fresh upload component (contents=None), which
+        # re-fires this callback — nothing was uploaded, so leave the store alone.
+        if upload_contents is None:
+            raise dash.exceptions.PreventUpdate
         current_files = current_files or []
         if upload_contents is not None:
             # Normalize to list.
@@ -225,21 +229,27 @@ def register_callbacks(app):
 
         return current_range
 
-    # Callback: Reset global separation and per-file controls.
+    # Callback: Reset the whole tab back to its initial state.
+    # In the desktop window there's no page refresh to start over with, so Reset
+    # has to clear the loaded patterns too — not just the slider values. Clearing
+    # file-store removes the per-file controls (they're rebuilt with defaults on
+    # the next upload) and re-fires update_angle_range_slider. The upload
+    # component is swapped for a fresh one so its hidden file input forgets the
+    # previous selection — otherwise re-picking the same files fires nothing.
     @app.callback(
+        Output('file-store', 'data', allow_duplicate=True),
+        Output('upload-wrapper', 'children'),
         Output('global-sep-slider', 'value'),
-        Output({'type': 'bg-slider', 'index': ALL}, 'value'),
-        Output({'type': 'int-slider', 'index': ALL}, 'value'),
+        Output('legend-store', 'data', allow_duplicate=True),
+        Output('width-ratio-input', 'value'),
+        Output('height-ratio-input', 'value'),
         Input('reset-button', 'n_clicks'),
-        State('file-store', 'data')
+        prevent_initial_call=True
     )
-    def reset_controls(n_clicks, files):
-        if not n_clicks or n_clicks == 0:
+    def reset_controls(n_clicks):
+        if not n_clicks:
             raise dash.exceptions.PreventUpdate
-        num_files = len(files) if files else 0
-        bg_defaults = [0] * num_files
-        int_defaults = [100] * num_files
-        return 0, bg_defaults, int_defaults
+        return [], create_upload_component(n_clicks), 0, True, 4, 3
 
     # Callback: Update the aspect ratio of the graph container.
     @app.callback(
